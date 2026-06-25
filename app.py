@@ -1,4 +1,6 @@
 import io
+import requests
+from datetime import datetime
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -76,6 +78,95 @@ st.markdown("""
     <p>주문데이터 + 상품마스터를 업로드하면 자동으로 병합하여 분석합니다</p>
 </div>
 """, unsafe_allow_html=True)
+
+# ── 서울 날씨 (Open-Meteo) ───────────────────────────────────────
+@st.cache_data(ttl=600)
+def fetch_seoul_weather():
+    url = (
+        "https://api.open-meteo.com/v1/forecast"
+        "?latitude=37.5665&longitude=126.9780"
+        "&current=temperature_2m,weathercode"
+        "&hourly=temperature_2m"
+        "&timezone=Asia%2FSeoul"
+        "&forecast_days=1"
+    )
+    r = requests.get(url, timeout=10)
+    r.raise_for_status()
+    return r.json()
+
+def weathercode_to_label(code):
+    if code == 0:            return "맑음 ☀️"
+    elif code <= 3:          return "구름 많음 ⛅"
+    elif code <= 49:         return "안개 🌫️"
+    elif code <= 69:         return "비 🌧️"
+    elif code <= 79:         return "눈 🌨️"
+    elif code <= 82:         return "소나기 🌦️"
+    elif code <= 99:         return "뇌우 ⛈️"
+    return "알 수 없음"
+
+try:
+    weather_data = fetch_seoul_weather()
+    current_temp = weather_data["current"]["temperature_2m"]
+    current_code = weather_data["current"]["weathercode"]
+    hourly_times = weather_data["hourly"]["time"]          # ["2025-06-25T00:00", ...]
+    hourly_temps = weather_data["hourly"]["temperature_2m"]
+
+    now_hour = datetime.now().hour
+    hourly_df = pd.DataFrame({
+        "시각": [t[11:16] for t in hourly_times],          # "00:00" 형식
+        "기온(°C)": hourly_temps,
+        "hour": range(len(hourly_times)),
+    })
+
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">🌡️ 서울 현재 날씨 (Open-Meteo)</div>', unsafe_allow_html=True)
+
+    w1, w2, w_chart = st.columns([1, 1, 4], gap="medium")
+    with w1:
+        st.markdown(f"""
+        <div class="kpi-card" style="border-left-color:#F97316;">
+            <div class="kpi-label">🌡️ 현재 기온</div>
+            <div class="kpi-value">{current_temp:.1f} °C</div>
+            <div class="kpi-sub">{weathercode_to_label(current_code)}</div>
+        </div>""", unsafe_allow_html=True)
+    with w2:
+        st.markdown(f"""
+        <div class="kpi-card" style="border-left-color:#0EA5E9;">
+            <div class="kpi-label">📍 위치</div>
+            <div class="kpi-value" style="font-size:1.3rem;">서울특별시</div>
+            <div class="kpi-sub">37.57°N 126.98°E</div>
+        </div>""", unsafe_allow_html=True)
+    with w_chart:
+        fig_weather = go.Figure()
+        fig_weather.add_trace(go.Scatter(
+            x=hourly_df["시각"],
+            y=hourly_df["기온(°C)"],
+            mode="lines+markers",
+            line=dict(color="#F97316", width=2.5),
+            marker=dict(size=5),
+            fill="tozeroy",
+            fillcolor="rgba(249,115,22,0.10)",
+            name="기온",
+        ))
+        fig_weather.add_vline(
+            x=f"{now_hour:02d}:00",
+            line_width=2, line_dash="dash", line_color="#7C3AED",
+            annotation_text="현재", annotation_position="top",
+        )
+        fig_weather.update_layout(
+            plot_bgcolor="white", paper_bgcolor="white",
+            xaxis=dict(title="", showgrid=False, tickangle=-45),
+            yaxis=dict(title="°C", showgrid=True, gridcolor="#F0F0F0"),
+            margin=dict(t=10, b=10, l=0, r=0),
+            height=200,
+            showlegend=False,
+        )
+        st.plotly_chart(fig_weather, use_container_width=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+except Exception as e:
+    st.warning(f"날씨 정보를 불러올 수 없습니다: {e}")
 
 # ── 파일 업로드 ──────────────────────────────────────────────────
 st.markdown('<div class="upload-area">', unsafe_allow_html=True)
