@@ -1,4 +1,5 @@
 import io
+import os
 from datetime import datetime
 
 import pandas as pd
@@ -9,6 +10,8 @@ import streamlit as st
 
 # ── 페이지 기본 설정 ─────────────────────────────────────────────
 st.set_page_config(page_title="가계부 대시보드", page_icon="💰", layout="wide")
+
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 # ── 커스텀 CSS ───────────────────────────────────────────────────
 st.markdown("""
@@ -79,7 +82,7 @@ st.markdown("""
 # ── 기본 데이터 로드 ─────────────────────────────────────────────
 @st.cache_data
 def load_default():
-    df = pd.read_csv("data/가계부.csv")
+    df = pd.read_csv(os.path.join(DATA_DIR, "가계부.csv"))
     df["날짜"] = pd.to_datetime(df["날짜"])
     return df
 
